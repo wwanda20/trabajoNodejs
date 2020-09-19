@@ -188,7 +188,7 @@ app.post('/libro', async (req, res) =>{  //Para recibir un libro
 //GET
 app.get('/libro', async (req, res)=>{             //dar informacion de todos los libros
     try{
-        let listadoLibros = await LibroModel.find({deleted:0});
+        let listadoLibros = await LibroModel.find();
         res.status(200).send(listadoLibros);       //respuesta
     }
     catch(e){
