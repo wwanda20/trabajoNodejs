@@ -5,6 +5,7 @@ const app = express (); //variable de tipo express
 
 app.use(express.json()); //recibo informacion dentro del body es en formato json 
 
+//conexion con base de datos
 const uri = "mongodb+srv://wandaw:tRDjeUQEzfHOGOxZ@cluster0.y8rlu.mongodb.net/libreria?retryWrites=true&w=majority";
 
 //conexion
@@ -22,23 +23,105 @@ async function conectar() {
 };
 conectar();
 
+//ESQUEMA GENERO  
+const GeneroSchema = new mongoose.Schema({           //estructura de generos
+    name: String
+    
+});
 
-//Esquema libros
+//Cada libro va a seguir la estructura de schema
+const GeneroModel = mongoose.model("generos",GeneroSchema);
+
+
+//ESQUEMA LIBRO
 const LibroSchema = new mongoose.Schema({           //estructura que se va a guardar 
     name: String,
     author: String,
     lended: String,
     gender: {
         type: mongoose.Schema.Types.ObjectId,       //tipo de id de mongoose
-        ref: 'generos',
+        ref: "generos"
     }
-
 });
 
 //Cada libro va a seguir la estructura de schema
 const LibroModel = mongoose.model("libros",LibroSchema);
 
-//CRUD
+
+function capitalizeTxt(name) {
+    return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase(); 
+}
+
+//CRUD GENERO
+
+//NUEVO GENERO
+app.post('/genero', async (req, res) =>{  //Para recibir un genero
+    try{
+        let name = req.body.name;      //recibo en body
+        
+
+        if(name == undefined){         //comprobacion de datos
+            throw new Error ('No enviaste un genero');      //creo un error
+        }
+        if(name == ''){         
+            throw new Error ('No puede estar vacio');      
+        }
+        
+        
+        //verifico si el genero ya existe
+
+        let generoExiste = await GeneroModel.find({name : capitalizeTxt(name)});     //para no repetir un genero
+
+        if(generoExiste.length > 0){        
+            throw new Error("Este genero ya existe");
+        }
+
+        let generos = {
+            name: capitalizeTxt(name),           //devuelve valor convertido mayusculas 
+        }
+
+        await GeneroModel.create(generos);
+        console.log(generos);
+        res.status(200).send(generos);
+    }
+
+    catch(e){
+        console.log(e);
+        res.status(422).send({error: e});
+    }
+});
+
+
+//GET
+app.get('/genero', async (req, res)=>{   //dar informacion de todos los generos
+    try{
+        let respuesta = await GeneroModel.find();
+        res.status(200).send(respuesta); 
+    }
+    catch(e){
+        console.log(e);
+        res.status(422).send({error: e});
+    }
+});
+
+
+//GET POR ID GENEROS
+app.get('/genero/:id', async (req, res)=>{
+    try{    
+        let idGenero = await GeneroModel.findById(req.params.id);     //busco por id
+        res.status(200).send(idGenero);    
+    }
+    catch(e){
+        console.log(e);
+        res.status(422).send({error: e});
+    }
+});
+
+
+
+//CRUD LIBRO
+
+//POST
 app.post('/libro', async (req, res) =>{  //Para recibir un libro
     try{
         let name = req.body.name;      //recibo en body
@@ -61,24 +144,23 @@ app.post('/libro', async (req, res) =>{  //Para recibir un libro
             throw new Error ('No puede estar vacio');      
         }
         
-        //lended
-        if(lended === undefined){         
-            throw new Error ('No enviaste a quien fue prestado');    
-        }
-        if(lended == ''){         
-            throw new Error ('No puede estar vacio');      
-        }
-        
         //gender
         if(gender === undefined){         
-            throw new Error ('No enviaste un genero');      
+            throw new Error ('No ingresaste un género');    
         }
         if(gender == ''){         
             throw new Error ('No puede estar vacio');      
         }
+        
+        let generoexiste = await GeneroModel.findById(capitalizeTxt (gender));
+        if(generoexiste.length = 0){
+            throw new Error ('Debe cargar antes el género');
+        }
+        
 
         //libro ya ingresado
-        let libroExiste = await LibroModel.find({name : name});     //para no repetir un libro ya cargado
+        let libroExiste = null;
+        libroExiste = await LibroModel.find({name : name});     //para no repetir un libro ya cargado
 
         if(libroExiste.length > 0){        
             throw new Error("El libro ya fue cargado");
@@ -88,12 +170,12 @@ app.post('/libro', async (req, res) =>{  //Para recibir un libro
             name: name,
             author: author,
             lended: lended,
-            gender:gender
+            gender: capitalizeTxt(gender)
         }
 
         let libroGuardado = await LibroModel.create(libro);
         console.log(libroGuardado);
-        res.status(200).send('Libro: '+libroGuardado);
+        res.status(200).send(libroGuardado);
     }
 
     catch(e){
@@ -102,10 +184,12 @@ app.post('/libro', async (req, res) =>{  //Para recibir un libro
     }
 });
 
-app.get('/libro', async (req, res)=>{   //dar informacion
+
+//GET
+app.get('/libro', async (req, res)=>{             //dar informacion de todos los libros
     try{
-        let listadoLibros = await LibroModel.find();
-        res.status(200).send(listadoLibros); //respuesta
+        let listadoLibros = await LibroModel.find({deleted:0});
+        res.status(200).send(listadoLibros);       //respuesta
     }
     catch(e){
         console.log(e);
@@ -114,10 +198,12 @@ app.get('/libro', async (req, res)=>{   //dar informacion
 });
 
 
+//GET POR ID
 app.get('/libro/:id', async (req, res)=>{
     try{    
-        let libro = await LibroModel.findById(req.params.id); //recibo el id dentro de req.params
-        res.status(200).send(libro);    //en postman va a mostrar el id
+        let libro = await LibroModel.findById(req.params.id);         //recibo el id dentro de req.params
+        res.status(200).send(libro);                                    //en postman va a mostrar el id
+        console.log(libro);
     }
     catch(e){
         console.log(e);
@@ -125,7 +211,9 @@ app.get('/libro/:id', async (req, res)=>{
     }
 });
 
-app.delete('/libro/:id', async (req, res)=>{                 //NO FUNCIONA
+
+//DELETE
+app.delete('/libro/:id', async (req, res)=>{               
     try{    
         let id = req.params.id;
         await LibroModel.findByIdAndDelete(id); 
@@ -138,7 +226,8 @@ app.delete('/libro/:id', async (req, res)=>{                 //NO FUNCIONA
 });
 
 
-app.put('/libro/:id', async (req, res)=>{                     //NO FUNCIONA
+//PRESTAR 
+app.put('/libro/:id', async (req, res)=>{          //para prestar un libro             
     try{
         let id = req.params.id;
         let lended = req.body.lended;
@@ -166,81 +255,7 @@ app.put('/libro/:id', async (req, res)=>{                     //NO FUNCIONA
 });      
 
 
-
-
-//Esquema generos    
-const GeneroSchema = new mongoose.Schema({           //estructura de generos
-    genero: String
-    
-});
-
-//Cada libro va a seguir la estructura de schema
-const GeneroModel = mongoose.model("generos",GeneroSchema);
-
-//crud
-app.post('/genero', async (req, res) =>{  //Para recibir un genero
-    try{
-        let genero = req.body.name;      //recibo en body
-        
-
-        if(genero === undefined){         //comprobacion de datos
-            throw new Error ('No enviaste un genero');      //creo un error
-        }
-        if(genero == ''){         
-            throw new Error ('No puede estar vacio');      
-        }
-        
-        
-        //verifico si el genero ya existe
-        
-        let generoExiste = await GeneroModel.find({genero : genero.toUpperCase()});     //para no repetir un genero
-
-        if(generoExiste.length > 0){        
-            throw new Error("Este genero ya existe");
-        }
-
-        let generos = {
-            genero: genero.toUpperCase()            //devuelve valor convertido en mayusculas
-        }
-
-        await GeneroModel.create(generos);
-        console.log(generos);
-        res.status(200).send(generos);
-    }
-
-    catch(e){
-        console.log(e);
-        res.status(422).send({error: e});
-    }
-});
-
-
-
-app.get('/genero', async (req, res)=>{   //dar informacion
-    try{
-        let respuesta = null;
-        respuesta = await GeneroModel.find();
-        res.status(200).send(respuesta); 
-    }
-    catch(e){
-        console.log(e);
-        res.status(422).send({error: e});
-    }
-});
-
-app.get('/genero/:id', async (req, res)=>{
-    try{    
-        let idGenero = await GeneroModel.findById(req.params.id);     //busco por id
-        res.status(200).send(idGenero);    
-    }
-    catch(e){
-        console.log(e);
-        res.status(422).send({error: e});
-    }
-});
-
-
-
+//SERVIDOR
 app.listen(3000,()=>{
     console.log('servidor escuchado en el puerto 3000');  //servidor disponible
 });
